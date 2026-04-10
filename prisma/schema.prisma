@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderMode {
+  DINE_IN
+  TAKEAWAY
+}
+
+enum OrderStatus {
+  NEW
+  PREPARING
+  COMPLETED
+  CANCELLED
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+model Store {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  phone         String?
+  address       String?
+  description   String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  businessHours BusinessHour[]
+  categories    Category[]
+  products      Product[]
+  tables        Table[]
+  orders        Order[]
+  users         User[]
+}
+
+model Table {
+  id        String   @id @default(cuid())
+  storeId   String
+  code      String
+  capacity  Int      @default(4)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store     Store    @relation(fields: [storeId], references: [id])
+  orders    Order[]
+
+  @@unique([storeId, code])
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  storeId   String
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store     Store    @relation(fields: [storeId], references: [id])
+  products  Product[]
+
+  @@index([storeId, sortOrder])
+}
+
+model Product {
+  id           String               @id @default(cuid())
+  storeId      String
+  categoryId   String
+  name         String
+  description  String?
+  price        Decimal              @db.Decimal(10, 2)
+  imageUrl     String?
+  stock        Int                  @default(0)
+  isAvailable  Boolean              @default(true)
+  sortOrder    Int                  @default(0)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  store        Store                @relation(fields: [storeId], references: [id])
+  category     Category             @relation(fields: [categoryId], references: [id])
+  optionGroups ProductOptionGroup[] @relation("ProductToOptionGroups")
+  orderItems   OrderItem[]
+
+  @@index([storeId, categoryId])
+}
+
+model ProductOptionGroup {
+  id         String          @id @default(cuid())
+  storeId    String
+  name       String
+  minSelect  Int             @default(0)
+  maxSelect  Int             @default(1)
+  isRequired Boolean         @default(false)
+  sortOrder  Int             @default(0)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  store      Store           @relation(fields: [storeId], references: [id])
+  options    ProductOption[]
+  products   Product[]       @relation("ProductToOptionGroups")
+}
+
+model ProductOption {
+  id        String             @id @default(cuid())
+  groupId   String
+  name      String
+  priceDiff Decimal            @db.Decimal(10, 2)
+  isActive  Boolean            @default(true)
+  sortOrder Int                @default(0)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  group     ProductOptionGroup @relation(fields: [groupId], references: [id])
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  storeId      String
+  tableId      String?
+  orderNo      String      @unique
+  mode         OrderMode
+  status       OrderStatus @default(NEW)
+  customerNote String?
+  subtotal     Decimal     @db.Decimal(10, 2)
+  total        Decimal     @db.Decimal(10, 2)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  store        Store       @relation(fields: [storeId], references: [id])
+  table        Table?      @relation(fields: [tableId], references: [id])
+  items        OrderItem[]
+
+  @@index([storeId, status, createdAt])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  productId   String
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  optionPrice Decimal  @db.Decimal(10, 2) @default(0)
+  note        String?
+  options     Json?
+  createdAt   DateTime @default(now())
+  order       Order    @relation(fields: [orderId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  permissions String[]
+  users       User[]
+}
+
+model User {
+  id           String     @id @default(cuid())
+  storeId      String
+  roleId       String
+  email        String     @unique
+  name         String
+  passwordHash String
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  store        Store      @relation(fields: [storeId], references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
+}
+
+model BusinessHour {
+  id        String   @id @default(cuid())
+  storeId   String
+  dayOfWeek Int
+  openTime  String
+  closeTime String
+  isClosed  Boolean  @default(false)
+  store     Store    @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, dayOfWeek])
+}
