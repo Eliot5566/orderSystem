@@ -37,6 +37,7 @@ model Store {
   businessHours BusinessHour[]
   categories    Category[]
   products      Product[]
+  optionGroups  ProductOptionGroup[]
   tables        Table[]
   orders        Order[]
   users         User[]

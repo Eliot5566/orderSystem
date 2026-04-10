@@ -7,7 +7,8 @@ type MenuData = any;
 
 function useCart() {
   const [items, setItems] = useState<any[]>([]);
-  const add = (product: any) => setItems((prev) => [...prev, { productId: product.id, name: product.name, price: Number(product.price), quantity: 1, options: [] }]);
+  const add = (product: any, storeId: string) =>
+    setItems((prev) => [...prev, { storeId, productId: product.id, name: product.name, price: Number(product.price), quantity: 1, options: [] }]);
   return { items, add };
 }
 
@@ -38,7 +39,7 @@ export function MenuClient({ menu }: { menu: MenuData }) {
                 <p className="text-sm text-slate-500">{p.description}</p>
                 <p className="mt-1 text-brand-700">NT$ {Number(p.price)}</p>
               </div>
-              <button onClick={() => add(p)} className="rounded bg-brand-700 px-3 py-1 text-white">加入</button>
+              <button onClick={() => add(p, menu.id)} className="rounded bg-brand-700 px-3 py-1 text-white">加入</button>
             </div>
           </article>
         ))}

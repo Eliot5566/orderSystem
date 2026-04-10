@@ -3,23 +3,47 @@
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+function isCuid(value?: string) {
+  return typeof value === 'string' && /^c[a-z0-9]{24}$/i.test(value);
+}
+
 export default function CheckoutPage() {
   const params = useSearchParams();
   const router = useRouter();
-  const items = JSON.parse(decodeURIComponent(params.get('payload') ?? '[]')) as any[];
+  const items = JSON.parse(decodeURIComponent(params.get('payload') ?? '[]')) as Array<{ storeId?: string; productId: string; quantity: number }>;
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
+    const envStoreId = process.env.NEXT_PUBLIC_DEMO_STORE_ID;
+    const envTableId = process.env.NEXT_PUBLIC_DEMO_TABLE_ID;
+    const payloadStoreId = items[0]?.storeId;
+    const storeId = isCuid(payloadStoreId) ? payloadStoreId : isCuid(envStoreId) ? envStoreId : undefined;
+
+    if (!storeId) {
+      alert('找不到有效門市，請回菜單頁重新加入商品');
+      return;
+    }
+
     setLoading(true);
+    const body: {
+      storeId: string;
+      mode: 'DINE_IN';
+      tableId?: string;
+      items: Array<{ productId: string; quantity: number; options: [] }>;
+    } = {
+      storeId,
+      mode: 'DINE_IN',
+      items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, options: [] }))
+    };
+
+    if (isCuid(envTableId)) {
+      body.tableId = envTableId;
+    }
+
     const res = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        storeId: process.env.NEXT_PUBLIC_DEMO_STORE_ID,
-        mode: 'DINE_IN',
-        tableId: process.env.NEXT_PUBLIC_DEMO_TABLE_ID,
-        items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, options: [] }))
-      })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     setLoading(false);
