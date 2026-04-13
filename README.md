@@ -1,69 +1,139 @@
-# 手機點餐系統 (商業級 MVP)
+# Order System（Next.js + Prisma + PostgreSQL）
 
-## 專案簡介
-以 **Next.js + Prisma + PostgreSQL** 建置的完整餐飲手機點餐平台，包含：顧客點餐、後台管理、廚房看板、報表分析與 RBAC。
+手機點餐系統 MVP，包含：
+- customer 點餐流程（menu/cart/checkout）
+- kitchen 現場看板
+- admin 管理後台（RBAC）
+- dashboard / reports 統計
 
-## 技術棧
-- Frontend/Backend: Next.js 14 + TypeScript (App Router + Route Handlers)
-- UI: Tailwind CSS + Recharts
-- DB: PostgreSQL
-- ORM: Prisma
-- Auth: JWT (admin)
-- Validation: Zod
-- Testing: Vitest
-- Deploy: Docker / docker-compose
+## 1) 需求環境
 
-## 架構設計與取捨
-- 使用單體 Next.js 減少跨服務溝通成本，快速交付商業 MVP。
-- 透過 `lib/services` 與 `lib/validators` 分層，後續可抽離成獨立 NestJS 服務。
-- 即時看板目前採 polling（5 秒），務實、穩定、部署成本低，後續可升級 WebSocket。
+- Node.js 20+（建議 22）
+- npm 10+
+- PostgreSQL 16（或使用 Docker）
 
-## 目錄結構
-- `app/customer/*`: 顧客端點餐流程
-- `app/admin/*`: 後台管理頁
-- `app/kitchen/*`: 現場看板
-- `app/api/*`: REST API
-- `lib/auth|services|validators`: 核心商業邏輯
-- `prisma/schema.prisma`: DB schema
-- `prisma/seed.ts`: 種子資料
+## 2) 快速啟動（本機開發）
 
-## 安裝方式
+### Step A. 安裝相依套件
+
 ```bash
 npm install
+```
+
+### Step B. 設定環境變數
+
+```bash
 cp .env.example .env
+```
+
+若使用 docker-compose 內建 DB，可直接沿用 .env.example 的 `DATABASE_URL`。
+
+### Step C. 啟動 PostgreSQL
+
+你可以擇一：
+
+1. 本機 PostgreSQL（自行啟動服務）
+2. Docker 啟動 DB（建議）
+
+```bash
+docker compose up -d db
+```
+
+### Step D. Prisma 初始化
+
+```bash
 npm run prisma:generate
 npm run prisma:migrate
 npm run prisma:seed
+```
+
+### Step E. 啟動專案
+
+```bash
 npm run dev
 ```
 
-## Docker 啟動
+預設網址：
+- customer menu: `http://localhost:3000/customer/menu?storeSlug=demo-store`
+- admin login: `http://localhost:3000/login`
+- kitchen board: `http://localhost:3000/kitchen`
+
+## 3) Docker 一次啟動（db + app）
+
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-## 環境變數
-請參考 `.env.example`。
+說明：
+- compose 會先等 DB healthy，再啟 app
+- app 啟動時會執行：generate → migrate deploy → seed → start
 
-## DB migration / seed
+容器主要環境變數（於 [docker-compose.yml](docker-compose.yml)）：
+- `DATABASE_URL=postgresql://order_user:order_pass@db:5432/order_system?schema=public`
+- `JWT_SECRET=super-secret`
+- `NEXT_PUBLIC_BASE_URL=http://localhost:3000`
+- `NEXT_PUBLIC_DEMO_STORE_ID`（可留空）
+- `NEXT_PUBLIC_DEMO_TABLE_ID`（可留空）
+
+## 4) 預設帳號
+
+- Email: `admin@demo.com`
+- Password: `Admin123!`
+
+## 5) 常用指令
+
 ```bash
+npm run dev
+npm run typecheck
+npm run test
+npm run prisma:generate
 npm run prisma:migrate
 npm run prisma:seed
 ```
 
-## 測試
+## 6) Seed 說明（可重複執行）
+
+- [prisma/seed.ts](prisma/seed.ts) 為重建型 seed：每次先清空示範資料再重建。
+- 可重複執行，不會累積重複資料。
+- 結束時會輸出 `storeId` 與 `sampleTableId`，可視需求填到 .env：
+	- `NEXT_PUBLIC_DEMO_STORE_ID`
+	- `NEXT_PUBLIC_DEMO_TABLE_ID`
+
+## 7) 目錄概覽
+
+- [app/customer](app/customer) customer 端頁面
+- [app/admin](app/admin) admin 頁面
+- [app/kitchen](app/kitchen) kitchen 看板
+- [app/api](app/api) API
+- [lib/services](lib/services) 業務 service
+- [lib/validators](lib/validators) validator
+- [prisma/schema.prisma](prisma/schema.prisma) 資料模型
+
+## 8) 疑難排解
+
+### Prisma P1001（連不到 DB）
+
+- 確認 PostgreSQL 有啟動
+- 檢查 `.env` 的 `DATABASE_URL`
+- 若用 Docker，先執行：
+
 ```bash
-npm run lint
-npm run typecheck
-npm run test
+docker compose ps
+docker compose logs db
 ```
 
-## 預設帳號
-- admin: `admin@demo.com`
-- password: `Admin123!`
+### migration 失敗
 
-## 系統流程
-1. 顧客掃 QR 進 `/customer/menu?storeSlug=demo-store`
-2. 加入購物車 → 結帳送出 `/api/orders`
-3. 廚房看板 `/kitchen` 依狀態流轉 NEW → PREPARING → COMPLETED/CANCELLED
-4. 後台可管理商品/分類/訂單/桌號/人員與查看報表
+- 先確認 schema 正確
+- 再執行：
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+### 型別錯誤檢查
+
+```bash
+npx tsc --noEmit
+```

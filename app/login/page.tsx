@@ -1,10 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const params = useSearchParams();
   const [email, setEmail] = useState('admin@demo.com');
   const [password, setPassword] = useState('Admin123!');
 
@@ -15,7 +17,14 @@ export default function LoginPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
-    if (res.ok) router.push('/admin');
+    if (res.ok) {
+      const next = params.get('next');
+      if (next && next.startsWith('/admin')) {
+        window.location.assign(next);
+      } else {
+        router.push('/admin');
+      }
+    }
     else alert('登入失敗');
   };
 

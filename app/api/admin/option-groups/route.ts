@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth/guard';
+import { authErrorResponse, requireAuth } from '@/lib/auth/guard';
 import { PERMISSIONS } from '@/lib/auth/rbac';
 
 const schema = z.object({
@@ -14,13 +14,13 @@ const schema = z.object({
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, [PERMISSIONS.PRODUCT_MANAGE]);
-  if (!auth.ok) return NextResponse.json({ message: auth.reason }, { status: 401 });
+  if (!auth.ok) return authErrorResponse(auth);
   return NextResponse.json(await prisma.productOptionGroup.findMany({ where: { storeId: auth.session.storeId }, include: { options: true } }));
 }
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, [PERMISSIONS.PRODUCT_MANAGE]);
-  if (!auth.ok) return NextResponse.json({ message: auth.reason }, { status: 401 });
+  if (!auth.ok) return authErrorResponse(auth);
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ errors: parsed.error.flatten() }, { status: 400 });
   const row = await prisma.productOptionGroup.create({

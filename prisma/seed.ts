@@ -37,8 +37,9 @@ async function main() {
     data: Array.from({ length: 7 }).map((_, i) => ({ storeId: store.id, dayOfWeek: i, openTime: '10:00', closeTime: '21:00', isClosed: false }))
   });
 
+  const tableCodes = ['A1', 'A2', 'A3', 'B1', 'B2', 'T1'];
   const tables = await prisma.table.createMany({
-    data: ['A1', 'A2', 'A3', 'B1', 'B2', 'T1'].map((code) => ({ storeId: store.id, code, capacity: 4 }))
+    data: tableCodes.map((code, idx) => ({ storeId: store.id, code, capacity: 4, sortOrder: idx + 1 }))
   });
 
   const categories = await Promise.all([
@@ -110,7 +111,13 @@ async function main() {
     });
   }
 
-  console.log('Seed completed', { storeId: store.id, tableCount: tables.count });
+  console.log('Seed completed', {
+    storeId: store.id,
+    tableCount: tables.count,
+    sampleTableId: table?.id,
+    sampleStoreSlug: store.slug,
+    note: '可將 storeId/tableId 寫入 .env 的 NEXT_PUBLIC_DEMO_STORE_ID / NEXT_PUBLIC_DEMO_TABLE_ID'
+  });
 }
 
 main().finally(() => prisma.$disconnect());

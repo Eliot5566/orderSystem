@@ -1,27 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createOrderSchema } from '@/lib/validators/order';
-import { createOrder } from '@/lib/services/order-service';
-import { prisma } from '@/lib/prisma';
+import { createOrderSchema, orderListQuerySchema } from '@/lib/validators/order';
+import { createOrder, listOrders, OrderValidationError } from '@/lib/services/order-service';
+
+function success<T>(data: T, status = 200) {
+  return NextResponse.json({ success: true, data }, { status });
+}
+
+function fail(message: string, code: string, status: number, details?: unknown) {
+  return NextResponse.json({ success: false, error: { code, message, details } }, { status });
+}
 
 export async function POST(req: NextRequest) {
-  const parsed = createOrderSchema.safeParse(await req.json());
-  if (!parsed.success) {
-    return NextResponse.json({ errors: parsed.error.flatten() }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return fail('Invalid JSON body', 'INVALID_JSON', 400);
   }
+
+  const parsed = createOrderSchema.safeParse(body);
+  if (!parsed.success) {
+    return fail('Payload validation failed', 'VALIDATION_ERROR', 400, parsed.error.flatten());
+  }
+
   try {
     const order = await createOrder(parsed.data);
-    return NextResponse.json(order, { status: 201 });
+    return success(order, 201);
   } catch (error) {
-    return NextResponse.json({ message: (error as Error).message }, { status: 400 });
+    if (error instanceof OrderValidationError) {
+      const statusByCode: Record<OrderValidationError['code'], number> = {
+        STORE_NOT_FOUND: 404,
+        TABLE_INVALID: 404,
+        PRODUCT_NOT_AVAILABLE: 409,
+        OPTION_INVALID: 409,
+        OPTION_RULE_VIOLATION: 409
+      };
+      return fail(error.message, error.code, statusByCode[error.code], error.details);
+    }
+    return fail('Failed to create order', 'INTERNAL_ERROR', 500);
   }
 }
 
 export async function GET(req: NextRequest) {
-  const status = req.nextUrl.searchParams.get('status') as any;
-  const orders = await prisma.order.findMany({
-    where: { status: status || undefined },
-    orderBy: { createdAt: 'desc' },
-    include: { items: { include: { product: true } }, table: true }
-  });
-  return NextResponse.json(orders);
+  const parsed = orderListQuerySchema.safeParse({ status: req.nextUrl.searchParams.get('status') });
+  if (!parsed.success) {
+    return fail('Query validation failed', 'VALIDATION_ERROR', 400, parsed.error.flatten());
+  }
+
+  try {
+    const orders = await listOrders(parsed.data);
+    return success(orders);
+  } catch {
+    return fail('Failed to query orders', 'INTERNAL_ERROR', 500);
+  }
 }

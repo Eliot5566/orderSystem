@@ -1,23 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth/guard';
+import { authErrorResponse, requireAuth } from '@/lib/auth/guard';
 import { PERMISSIONS } from '@/lib/auth/rbac';
+import { createCategorySchema } from '@/lib/validators/admin/category';
+import { AdminDataError, ensureCategoryNameUnique } from '@/lib/services/admin/data-integrity';
 
-const schema = z.object({ name: z.string().min(1), sortOrder: z.number().int().default(0), isActive: z.boolean().default(true) });
+function fail(message: string, code: string, status = 400, details?: unknown) {
+  return NextResponse.json({ success: false, error: { code, message, details } }, { status });
+}
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, [PERMISSIONS.CATEGORY_MANAGE]);
-  if (!auth.ok) return NextResponse.json({ message: auth.reason }, { status: 401 });
-  const rows = await prisma.category.findMany({ where: { storeId: auth.session.storeId }, orderBy: { sortOrder: 'asc' } });
+  if (!auth.ok) return authErrorResponse(auth);
+
+  const rows = await prisma.category.findMany({
+    where: { storeId: auth.session.storeId },
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }]
+  });
   return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, [PERMISSIONS.CATEGORY_MANAGE]);
-  if (!auth.ok) return NextResponse.json({ message: auth.reason }, { status: 401 });
-  const parsed = schema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ errors: parsed.error.flatten() }, { status: 400 });
-  const row = await prisma.category.create({ data: { ...parsed.data, storeId: auth.session.storeId } });
-  return NextResponse.json(row, { status: 201 });
+  if (!auth.ok) return authErrorResponse(auth);
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return fail('Invalid JSON body', 'INVALID_JSON', 400);
+  }
+
+  const parsed = createCategorySchema.safeParse(body);
+  if (!parsed.success) return fail('Payload validation failed', 'VALIDATION_ERROR', 400, parsed.error.flatten());
+
+  try {
+    await ensureCategoryNameUnique(auth.session.storeId, parsed.data.name);
+    const row = await prisma.category.create({ data: { ...parsed.data, storeId: auth.session.storeId } });
+    return NextResponse.json(row, { status: 201 });
+  } catch (error) {
+    if (error instanceof AdminDataError) {
+      return fail(error.message, error.code, error.status, error.details);
+    }
+    return fail('Failed to create category', 'INTERNAL_ERROR', 500);
+  }
 }

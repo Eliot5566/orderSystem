@@ -12,6 +12,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
   }
 
+  if (user.status !== 'ACTIVE') {
+    return NextResponse.json({ message: 'User is disabled' }, { status: 403 });
+  }
+
   const token = await signToken({
     userId: user.id,
     storeId: user.storeId,

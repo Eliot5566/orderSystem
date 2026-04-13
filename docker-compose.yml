@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: order_user
       POSTGRES_PASSWORD: order_pass
@@ -9,18 +10,28 @@ services:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U order_user -d order_system"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   app:
     build: .
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
     ports:
       - '3000:3000'
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://order_user:order_pass@db:5432/order_system?schema=public
       JWT_SECRET: super-secret
       NEXT_PUBLIC_BASE_URL: http://localhost:3000
-    command: sh -c "npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed && npm run dev"
+      NEXT_PUBLIC_DEMO_STORE_ID: ""
+      NEXT_PUBLIC_DEMO_TABLE_ID: ""
+    command: sh -c "npm run prisma:generate && npx prisma migrate deploy && npm run prisma:seed && npm run start"
 
 volumes:
   pgdata:

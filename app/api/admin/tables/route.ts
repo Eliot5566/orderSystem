@@ -1,21 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth/guard';
+import { authErrorResponse, requireAuth } from '@/lib/auth/guard';
 import { PERMISSIONS } from '@/lib/auth/rbac';
+import { createTableSchema } from '@/lib/validators/admin/table';
+import { AdminDataError, ensureTableCodeUnique } from '@/lib/services/admin/data-integrity';
 
-const schema = z.object({ code: z.string().min(1), capacity: z.number().int().positive().default(4), isActive: z.boolean().default(true) });
+function fail(message: string, code: string, status = 400, details?: unknown) {
+  return NextResponse.json({ success: false, error: { code, message, details } }, { status });
+}
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, [PERMISSIONS.TABLE_MANAGE]);
-  if (!auth.ok) return NextResponse.json({ message: auth.reason }, { status: 401 });
-  return NextResponse.json(await prisma.table.findMany({ where: { storeId: auth.session.storeId } }));
+  if (!auth.ok) return authErrorResponse(auth);
+  return NextResponse.json(
+    await prisma.table.findMany({ where: { storeId: auth.session.storeId }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] })
+  );
 }
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, [PERMISSIONS.TABLE_MANAGE]);
-  if (!auth.ok) return NextResponse.json({ message: auth.reason }, { status: 401 });
-  const parsed = schema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ errors: parsed.error.flatten() }, { status: 400 });
-  return NextResponse.json(await prisma.table.create({ data: { ...parsed.data, storeId: auth.session.storeId } }), { status: 201 });
+  if (!auth.ok) return authErrorResponse(auth);
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return fail('Invalid JSON body', 'INVALID_JSON', 400);
+  }
+
+  const parsed = createTableSchema.safeParse(body);
+  if (!parsed.success) return fail('Payload validation failed', 'VALIDATION_ERROR', 400, parsed.error.flatten());
+
+  try {
+    await ensureTableCodeUnique(auth.session.storeId, parsed.data.code);
+    return NextResponse.json(await prisma.table.create({ data: { ...parsed.data, storeId: auth.session.storeId } }), { status: 201 });
+  } catch (error) {
+    if (error instanceof AdminDataError) {
+      return fail(error.message, error.code, error.status, error.details);
+    }
+    return fail('Failed to create table', 'INTERNAL_ERROR', 500);
+  }
 }

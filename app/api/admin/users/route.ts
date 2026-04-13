@@ -2,20 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth/guard';
+import { authErrorResponse, requireAuth } from '@/lib/auth/guard';
 import { PERMISSIONS } from '@/lib/auth/rbac';
 
 const schema = z.object({ email: z.string().email(), name: z.string().min(1), password: z.string().min(8), roleCode: z.enum(['ADMIN', 'MANAGER', 'STAFF']) });
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, [PERMISSIONS.USER_MANAGE]);
-  if (!auth.ok) return NextResponse.json({ message: auth.reason }, { status: 401 });
+  if (!auth.ok) return authErrorResponse(auth);
   return NextResponse.json(await prisma.user.findMany({ where: { storeId: auth.session.storeId }, include: { role: true } }));
 }
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, [PERMISSIONS.USER_MANAGE]);
-  if (!auth.ok) return NextResponse.json({ message: auth.reason }, { status: 401 });
+  if (!auth.ok) return authErrorResponse(auth);
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ errors: parsed.error.flatten() }, { status: 400 });
 
