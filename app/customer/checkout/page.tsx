@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { clearCartStorage, parsePayloadToCart, readCartFromStorage } from '@/lib/customer/cart-storage';
+import { addOrderToHistory } from '@/lib/customer/order-history';
 
 function isCuid(value?: string) {
   return typeof value === 'string' && /^c[a-z0-9]{24}$/i.test(value);
@@ -27,6 +28,7 @@ export default function CheckoutPage() {
     const envStoreId = process.env.NEXT_PUBLIC_DEMO_STORE_ID;
     const envTableId = process.env.NEXT_PUBLIC_DEMO_TABLE_ID;
     const payloadStoreId = items[0]?.storeId;
+    const payloadTableId = items[0]?.tableId;
     const storeId = isCuid(payloadStoreId) ? payloadStoreId : isCuid(envStoreId) ? envStoreId : undefined;
 
     if (!storeId) {
@@ -36,7 +38,7 @@ export default function CheckoutPage() {
 
     setLoading(true);
 
-    const hasValidTableId = isCuid(envTableId);
+    const selectedTableId = isCuid(payloadTableId) ? payloadTableId : isCuid(envTableId) ? envTableId : undefined;
     const body: {
       storeId: string;
       mode: 'DINE_IN' | 'TAKEAWAY';
@@ -44,12 +46,12 @@ export default function CheckoutPage() {
       items: Array<{ productId: string; quantity: number; options: [] }>;
     } = {
       storeId,
-      mode: hasValidTableId ? 'DINE_IN' : 'TAKEAWAY',
+      mode: selectedTableId ? 'DINE_IN' : 'TAKEAWAY',
       items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, options: [] }))
     };
 
-    if (hasValidTableId) {
-      body.tableId = envTableId;
+    if (selectedTableId) {
+      body.tableId = selectedTableId;
     }
 
     const res = await fetch('/api/orders', {
@@ -60,8 +62,14 @@ export default function CheckoutPage() {
     const data = await res.json();
     setLoading(false);
     if (res.ok && data?.success) {
+      addOrderToHistory({
+        id: data.data.id,
+        orderNo: data.data.orderNo,
+        createdAt: data.data.createdAt,
+        total: Number(data.data.total ?? 0)
+      });
       clearCartStorage();
-      router.push(`/customer/order-complete?orderNo=${data.data.orderNo}`);
+      router.push(`/customer/order-complete?orderNo=${data.data.orderNo}&orderId=${data.data.id}`);
     }
     else setSubmitError(data?.error?.message || '建立訂單失敗');
   };
@@ -96,6 +104,7 @@ export default function CheckoutPage() {
 
       <section className="mt-4 card">
         <h2 className="mb-2 font-semibold">訂單摘要</h2>
+        <p className="mb-2 text-xs text-slate-500">用餐模式：{items[0]?.tableCode ? `內用（桌號 ${items[0].tableCode}）` : '外帶'}</p>
         <ul className="space-y-1 text-sm">
           {items.map((item) => (
             <li key={item.productId} className="flex items-center justify-between">

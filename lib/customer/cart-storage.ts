@@ -1,5 +1,7 @@
 export type CartItem = {
   storeId?: string;
+  tableId?: string;
+  tableCode?: string;
   productId: string;
   name: string;
   price: number;
@@ -17,6 +19,8 @@ function normalize(items: unknown): CartItem[] {
     .filter((item) => !!item.productId && Number(item.quantity) > 0)
     .map((item) => ({
       ...item,
+      tableId: typeof item.tableId === 'string' ? item.tableId : undefined,
+      tableCode: typeof item.tableCode === 'string' ? item.tableCode : undefined,
       quantity: Number(item.quantity),
       price: Number(item.price ?? 0)
     }));

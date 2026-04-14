@@ -2,6 +2,7 @@
 
 手機點餐系統 MVP，包含：
 - customer 點餐流程（menu/cart/checkout）
+- customer 掃碼入桌 + 我的訂單（單筆詳情、狀態自動重新整理）
 - kitchen 現場看板
 - admin 管理後台（RBAC）
 - dashboard / reports 統計
@@ -58,7 +59,7 @@ npm run dev
 - admin login: `http://localhost:3000/login`
 - kitchen board: `http://localhost:3000/kitchen`
 
-## 3) Docker 一次啟動（db + app）
+## 3) Docker 一次啟動（db + app + 反向代理）
 
 ```bash
 docker compose up --build
@@ -66,7 +67,34 @@ docker compose up --build
 
 說明：
 - compose 會先等 DB healthy，再啟 app
+- proxy（Nginx）會反向代理到 app，提供手機區網連線入口
 - app 啟動時會執行：generate → migrate deploy → seed → start
+
+手機連線網址：
+- 同一 Wi-Fi 下，使用 `http://你的電腦IP:8080`
+- 例如：`http://192.168.1.23:8080`
+
+可用此命令查電腦 IP（Windows PowerShell）：
+
+```powershell
+ipconfig
+```
+
+對外反向代理設定位置：
+- [infra/nginx/default.conf](infra/nginx/default.conf)
+
+> 注意：若 Docker Desktop / Docker Engine 沒有啟動，`8080` 反向代理不會存在，手機會顯示無法連線。
+
+### Docker 無法使用時（手機測試替代方案）
+
+可改用 Next.js 直接對外監聽：
+
+```bash
+npm run dev:lan
+```
+
+然後手機改連：
+- `http://你的電腦IP:3000`
 
 容器主要環境變數（於 [docker-compose.yml](docker-compose.yml)）：
 - `DATABASE_URL=postgresql://order_user:order_pass@db:5432/order_system?schema=public`
@@ -102,6 +130,8 @@ npm run prisma:seed
 ## 7) 目錄概覽
 
 - [app/customer](app/customer) customer 端頁面
+- [app/customer/scan](app/customer/scan) QRCode 掃描頁
+- [app/customer/orders](app/customer/orders) 我的訂單（含單筆詳情）
 - [app/admin](app/admin) admin 頁面
 - [app/kitchen](app/kitchen) kitchen 看板
 - [app/api](app/api) API
@@ -137,3 +167,10 @@ npm run prisma:migrate
 ```bash
 npx tsc --noEmit
 ```
+
+### QRCODE 掃描無法使用
+
+- 若桌機瀏覽器沒有相機、或未允許相機權限，請改用手機開啟掃描頁。
+- 手機建議先透過反向代理網址進入（`http://你的電腦IP:8080/customer/scan?storeSlug=demo-store`）。
+- 若你目前使用 `dev:lan`，請改用 `http://你的電腦IP:3000/customer/scan?storeSlug=demo-store`。
+- 若仍無法掃描，可先用手動輸入桌號（例如 `A1` 或 `TABLE:A1`）。

@@ -9,6 +9,8 @@ export default function HomePage() {
       </section>
       <div className="grid gap-3 md:grid-cols-2">
         <Link href="/customer/menu?storeSlug=demo-store" className="card hover:border-brand-600">顧客端點餐</Link>
+        <Link href="/customer/scan?storeSlug=demo-store" className="card hover:border-brand-600">掃描 QRCode 點餐</Link>
+        <Link href="/customer/orders" className="card hover:border-brand-600">查詢我的訂單</Link>
         <Link href="/login" className="card hover:border-brand-600">管理後台登入</Link>
         <Link href="/kitchen" className="card hover:border-brand-600">現場出餐看板</Link>
         <Link href="/admin/reports" className="card hover:border-brand-600">營運報表</Link>

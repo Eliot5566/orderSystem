@@ -16,7 +16,15 @@ async function getMenu(storeSlug: string) {
   return res.json();
 }
 
-export default async function MenuPage({ searchParams }: { searchParams: { storeSlug?: string } }) {
+export default async function MenuPage({ searchParams }: { searchParams: { storeSlug?: string; tableId?: string; tableCode?: string } }) {
   const menu = await getMenu(searchParams.storeSlug ?? 'demo-store');
-  return <MenuClient menu={menu} />;
+
+  const requestedTableId = searchParams.tableId;
+  const requestedTableCode = searchParams.tableCode?.toUpperCase();
+  const matchedTable = (menu.tables ?? []).find(
+    (table: { id: string; code: string }) =>
+      (requestedTableId && table.id === requestedTableId) || (requestedTableCode && table.code.toUpperCase() === requestedTableCode)
+  );
+
+  return <MenuClient menu={menu} tableId={matchedTable?.id} tableCode={matchedTable?.code} />;
 }

@@ -19,7 +19,12 @@ export async function GET(req: Request) {
           }
         }
       },
-      businessHours: true
+      businessHours: true,
+      tables: {
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+        select: { id: true, code: true }
+      }
     }
   });
 

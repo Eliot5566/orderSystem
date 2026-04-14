@@ -6,15 +6,17 @@ import { readCartFromStorage, type CartItem, writeCartToStorage } from '@/lib/cu
 
 type MenuData = any;
 
-function useCart() {
+function useCart(currentStoreId: string, tableId?: string, tableCode?: string) {
   const [items, setItems] = useState<CartItem[]>([]);
   const add = (product: any, storeId: string) => {
     setItems((prev) => {
-      const idx = prev.findIndex((item) => item.productId === product.id);
+      const conflictContext = prev.some((item) => item.storeId !== storeId || (item.tableId ?? '') !== (tableId ?? ''));
+      const base = conflictContext ? [] : prev;
+      const idx = base.findIndex((item) => item.productId === product.id);
       if (idx === -1) {
-        return [...prev, { storeId, productId: product.id, name: product.name, price: Number(product.price), quantity: 1, options: [] }];
+        return [...base, { storeId, tableId, tableCode, productId: product.id, name: product.name, price: Number(product.price), quantity: 1, options: [] }];
       }
-      return prev.map((item, i) => (i === idx ? { ...item, quantity: item.quantity + 1 } : item));
+      return base.map((item, i) => (i === idx ? { ...item, quantity: item.quantity + 1 } : item));
     });
   };
 
@@ -35,8 +37,14 @@ function useCart() {
 
   useEffect(() => {
     const stored = readCartFromStorage();
-    if (stored.length) setItems(stored);
-  }, []);
+    if (!stored.length) return;
+    const filtered = stored.filter((item) => {
+      const sameStore = (item.storeId ?? '') === currentStoreId;
+      const sameTable = tableId ? (item.tableId ?? '') === tableId : !(item.tableId ?? '');
+      return sameStore && sameTable;
+    });
+    setItems(filtered);
+  }, [currentStoreId, tableId]);
 
   useEffect(() => {
     writeCartToStorage(items);
@@ -45,10 +53,10 @@ function useCart() {
   return { items, add, decrease, quantityByProductId, subtotal };
 }
 
-export function MenuClient({ menu }: { menu: MenuData }) {
+export function MenuClient({ menu, tableId, tableCode }: { menu: MenuData; tableId?: string; tableCode?: string }) {
   const categories = menu?.categories ?? [];
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id);
-  const { items, add, decrease, quantityByProductId, subtotal } = useCart();
+  const { items, add, decrease, quantityByProductId, subtotal } = useCart(menu.id, tableId, tableCode);
   const category = useMemo(() => categories.find((c: any) => c.id === activeCategory), [categories, activeCategory]);
   const products = category?.products ?? [];
 
@@ -68,6 +76,15 @@ export function MenuClient({ menu }: { menu: MenuData }) {
       <header className="mb-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
         <h1 className="text-xl font-bold">{menu.name}</h1>
         <p className="text-sm text-slate-500">{menu.address}</p>
+        <p className="mt-1 text-xs text-slate-600">{tableCode ? `目前桌號：${tableCode}` : '目前為外帶模式（未綁定桌號）'}</p>
+        {!tableCode ? (
+          <Link
+            href={`/customer/scan?storeSlug=${encodeURIComponent(menu.slug ?? 'demo-store')}`}
+            className="mt-2 inline-block rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700"
+          >
+            掃描桌號 QRCode
+          </Link>
+        ) : null}
       </header>
       <div className="mb-3 flex gap-2 overflow-auto pb-1">
         {categories.map((c: any) => (

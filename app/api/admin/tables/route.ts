@@ -12,9 +12,13 @@ function fail(message: string, code: string, status = 400, details?: unknown) {
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, [PERMISSIONS.TABLE_MANAGE]);
   if (!auth.ok) return authErrorResponse(auth);
-  return NextResponse.json(
-    await prisma.table.findMany({ where: { storeId: auth.session.storeId }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] })
-  );
+  const rows = await prisma.table.findMany({
+    where: { storeId: auth.session.storeId },
+    orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+    include: { store: { select: { slug: true } } }
+  });
+
+  return NextResponse.json(rows.map(({ store, ...row }) => ({ ...row, storeSlug: store.slug })));
 }
 
 export async function POST(req: NextRequest) {
